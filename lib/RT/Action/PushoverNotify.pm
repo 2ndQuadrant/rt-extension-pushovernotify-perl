@@ -225,7 +225,7 @@ sub get_message_from_template {
     # or RT::User objects. Produce a map of tokens to (if known) RT user IDs.
     my %recipients = ();
     for my $recipient (@$recips) {
-        if (ref($recipient) == 'RT::User') {
+        if (ref($recipient) eq 'RT::User') {
             my $k = $recipient->FirstCustomFieldValue('PushoverUserKey');
             $recipients{$k} = $recipient->Id if $k;
         } else {
