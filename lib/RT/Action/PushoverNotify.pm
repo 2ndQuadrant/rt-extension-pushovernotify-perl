@@ -78,7 +78,7 @@ can get your pushover key from http://pushover.com/.
 
 Create the following table in your RT database:
 
-    CREATE TABLE PushoverNotifications (id serial primary key, RequestId text, UserId text, TicketId integer, AcknowledgedAt timestamptz, ReceiptId text, UserToken text not null, Priority integer, SentAt timestamptz);
+    CREATE TABLE PushoverNotifications (id serial primary key, RequestId text, UserId text, TicketId integer, AcknowledgedAt timestamptz, ReceiptId text, UserToken text not null, Priority integer, TransactionId integer, SentAt timestamptz);
 
 Create an entry in the scripactions table in the RT database for
 RT::Action::PushoverNotify, or (only once) "make initdb" on this extension to
@@ -246,7 +246,7 @@ sub Commit {
     my $self = shift;
     
     my $errors = 0;
-    RT::Logger->debug("Receipients are: " . Dumper($self->{'recipients'}));
+    RT::Logger->debug("Recipients are: " . Dumper($self->{'recipients'}));
 
     while (my ($recipient, $recipient_uid) = each %{$self->{'recipients'}}) {
         eval {
@@ -275,7 +275,7 @@ sub Commit {
                         ReceiptId => $r{'receipt'},
                         AcknowledgedAt => undef,
                         SentAt => $now->ISO,
-                        TransactionId => defined($self->Transaction) ? $self->Transaction->Id : undef,
+                        TransactionId => defined($self->TransactionObj) ? $self->TransactionObj->Id : undef,
                     );
                 };
                 if ($@) {
