@@ -194,6 +194,9 @@ sub get_message_from_template {
         die("Failed to process template " . $self->TemplateObj->Id . " for "
             . " ticket=" . $self->TicketObj->Id . ": $message");
     }
+    if( @$recips == 0) {
+        $RT::Logger->debug('No pushover recipients returned from template');
+    }
 
     my $MIMEObj = $self->TemplateObj->MIMEObj;
     my %message;
@@ -228,6 +231,7 @@ sub get_message_from_template {
         if (ref($recipient) eq 'RT::User') {
             my $k = $recipient->FirstCustomFieldValue('PushoverUserKey');
             $recipients{$k} = $recipient->Id if $k;
+            $RT::Logger->debug('Recipient had no pushover user key') unless $k;
         } else {
             # Assume it's just an API token and thus has no known RT::User id associated
             $recipients{$recipient} = undef;
@@ -246,10 +250,11 @@ sub Commit {
     my $self = shift;
     
     my $errors = 0;
-    RT::Logger->debug("Recipients are: " . Dumper($self->{'recipients'}));
+    $RT::Logger->debug("Recipients are: " . Dumper($self->{'recipients'}));
 
     while (my ($recipient, $recipient_uid) = each %{$self->{'recipients'}}) {
         eval {
+            local $SIG{__DIE__};
             my $ua = LWP::UserAgent->new();
             $self->{'message'}->{'user'} = $recipient;
             my $response = $ua->post( $self->{'cfg'}->{'endpoint'}, $self->{'message'} );
@@ -257,9 +262,9 @@ sub Commit {
                 my(%r) = %{decode_json($response->decoded_content)};
                 if (defined($r{'receipt'})) {
                     # TODO: Register a receipt callback URL in the notification
-                    RT::Logger->info("Notification sent to $recipient with request ID $r{'request'}; receipt is $r{'receipt'}");
+                    $RT::Logger->info("Notification sent to $recipient with request ID $r{'request'}; receipt is $r{'receipt'}");
                 } else {
-                    RT::Logger->debug("Notification sent to $recipient with request ID $r{'request'}");
+                    $RT::Logger->debug("Notification sent to $recipient with request ID $r{'request'}");
                 }
 
                 eval {
@@ -279,18 +284,18 @@ sub Commit {
                     );
                 };
                 if ($@) {
-                    RT::Logger->error("Failed to record notification in database: $@");
+                    $RT::Logger->error("Failed to record notification in database: $@");
                 }
             } else {
                 if ($response->code == 429) {
-                    RT::Logger->error("Pushover message quota reached! You need to buy messages at https://pushover.net/apps");   
+                    $RT::Logger->error("Pushover message quota reached! You need to buy messages at https://pushover.net/apps");   
                 }
                 $RT::Logger->debug("Pushover message failed: " . Dumper($self->{'message'}));
                 die("Pushover notification failed with HTTP " . $response->code . ': ' . $response->message . '; response body: ' . $response->decoded_content());
             }
         };
         if ($@) {
-            RT::Logger->error($@);
+            $RT::Logger->error($@);
             $errors ++;
         }
     }
